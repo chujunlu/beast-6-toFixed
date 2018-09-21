@@ -1,0 +1,152 @@
+<script src="../simpletest.js"></script>
+<script>
+  function toFixed(value, precision) {
+    value = unformat(value);
+
+    precision = Math.round(Math.abs(precision));
+    isNaN(precision)? 0 : precision;
+
+    if (precision > 100) {
+      throw new RangeError("toFixed() digits argument must be between 0 and 100");
+    }
+    
+    var rounded;
+    var negative = value < 0 ? '-' : '';
+    var absValue = Math.abs(value);
+    var strAbsValue = '' + absValue;
+    var absValueArray = strAbsValue.split('.');
+    var integerPart = absValueArray[0];
+    var fractionalPart = absValueArray[1] || '';
+    var fractionalLength = fractionalPart.length;
+
+    if (precision <= fractionalLength) {
+      var before = fractionalPart.slice(0, precision);
+      var after = fractionalPart.slice(precision, fractionalLength);
+      var decimalMoved = integerPart + before + '.' + after;
+      var roundedNum = Math.round(Number(decimalMoved));
+      var roundedStr = '' + roundedNum;
+      var decimalPos = roundedStr.length - precision;
+      var newBefore = roundedStr.slice(0, decimalPos);
+      var newAfter = roundedStr.slice(decimalPos, roundedStr.length);
+
+      rounded = negative + newBefore + '.' + newAfter;
+    } else {//precision > fractionalLength
+      rounded = negative + integerPart + '.' + fractionalPart + '0'.repeat(precision);
+    }
+
+    return (+rounded).toFixed(precision);
+  }
+
+  function unformat(value) {//I remove the decimal checking from accoutingJS.
+    if (Array.isArray(value) === true) {
+      return value.map(function (val) {
+        return unformat(val);
+      });
+    }
+
+    value = value || 0;//null or undefined
+    //decimal = '.';
+
+    if (typeof value === "number") {
+      return value;
+    }
+    
+    var unformatted = parseFloat(
+      ('' + value)
+      .replace(/\((.*\d+.*)\)/, '-$1')//why -$1 won't work
+      .replace(/[^-\.0-9]/g, '')
+    );
+
+    return isNaN(unformatted)? 0 : unformatted;
+  }
+
+  tests({
+    'It should return a string.': function () {
+      var result = toFixed(1, 0);
+      eq(typeof result, "string");
+    },
+    'It should return a string of a rounded integer when precision is 0.': function () {
+      eq(toFixed(0.615, 0), "1");
+      eq(toFixed(-10.735, 0), "-11");
+    },
+    'It should return a string of a rounded number with the correct precision, when value is a decimal number and precision < decimal.length.': function () {
+      eq(toFixed(1.284, 1), "1.3");
+      eq(toFixed(0.615, 2), "0.62");
+      eq(toFixed(10.235, 2), "10.24");
+      eq(toFixed(1.005, 2), "1.01");
+      eq(toFixed(-1.235, 2), "-1.24");
+      eq(toFixed(-0.615, 2), "-0.62");
+      eq(toFixed(-10.235, 2), "-10.24");
+      eq(toFixed(-1.005, 2), "-1.01");
+    },
+    'It should return a string version of the value if precision is equal to fractional length.': function () {
+      eq(toFixed(0.615, 3), "0.615");
+      eq(toFixed(-0.615, 3), "-0.615");
+    },
+    'It should pad the fractional part with "0"s if precision > fractional length.': function () {
+      eq(toFixed(0.615, 5), "0.61500");
+      eq(toFixed(-0.615, 5), "-0.61500");
+    },
+    'It should return a string integer when value is an integer and precision is 0.': function () {
+      eq(toFixed(1, 0), "1");
+      eq(toFixed(-1, 0), "-1");
+    },
+    'It should pad precision amount of "0"s when value is an integer and precision > 0.': function () {
+      eq(toFixed(1, 2), "1.00");
+      eq(toFixed(-1, 2), "-1.00");
+    },
+    'It should extract digits before the second decimal point or before the second dash to be value when value includes digits.': function () {
+      eq(toFixed("[]0a.615b9d", 2), "0.62");
+      eq(toFixed("/1*0a.235@9d", 6), "10.235900");
+      eq(toFixed("/1*0a.23.5@9d", 6), "10.230000");
+      eq(toFixed("/(1*0a.23-5&9d)", 6), "-10.230000");
+      eq(toFixed("-a.234e2d", 2), "-0.23");
+      eq(toFixed("--/1*0a.235#9d", 6), "0.000000"); 
+    },
+    'It should use 0 as value when value includes no digits.': function () {
+      eq(toFixed('a', 2), "0.00");
+      eq(toFixed([], 2), "0.00");
+      eq(toFixed({}, 2), "0.00");
+    },
+    'It should work for values in the scientific notation format.': function () {
+      eq(toFixed(6.15e-1, 2), "0.62");
+      eq(toFixed(-6.15e-1, 2), "-0.62");
+    },
+    'It should use precision absolute value when precision < 0.': function () {
+      eq(toFixed(0.615, -2), "0.62");
+    },
+    'It should throw a RangeError when precision or its absolute value > 100.': function () {
+      var isRangeError = false;
+
+      try {
+        toFixed(-1.23, -101);
+      } catch(e) {
+        isRangeError = (e instanceof RangeError);
+      }
+      eq(isRangeError, true);
+    },
+    'It should use 0 as precision when precision is omitted.': function () {
+      eq(toFixed(0.615), "1");
+      eq(toFixed(-0.615), "-1");
+    },
+    'It should use 0 as precision when precision is not a number.': function () {
+      eq(toFixed(0.615, 'a'), "1");
+      eq(toFixed(-0.615, []), "-1");
+    },
+    'It should use a rounded precision if precision passed in is not an integer.': function () {
+      eq(toFixed(0.615, 0.6), "0.6");
+      eq(toFixed(-0.615, -0.6), "-0.6");
+    },
+    'It should behave the same as accounting.toFixed() for big precision.': function () {
+      eq(toFixed(0.6, 17), "0.59999999999999998");
+      eq(toFixed(0.615, 17), "0.61499999999999999");
+    },
+    'Stress test for 0.': function () {
+      eq(toFixed(0, 1), "0.0");
+      eq(toFixed(-0, 1), "0.0");
+      eq(toFixed(-0.01, 0), "0");
+      eq(toFixed(-0.01, 1), '0.0');
+      eq(toFixed(-0.0, 10), '0.0000000000');
+    }
+  });
+</script>
